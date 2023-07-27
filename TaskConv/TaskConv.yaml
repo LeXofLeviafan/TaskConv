@@ -1,0 +1,80 @@
+tokens:
+  TaskName:
+    key:   name
+    regex: '[a-z]+'
+    fixed: yes
+  S:
+    key:   group
+    regex: '[0-9]+'
+    value: int
+  SS:
+    key:   test
+    regex: '[0-9]+'
+    value: int
+  SL:
+    key:   test
+    regex: '[a-z]+'
+    value: letternum
+
+types:
+  Baltic11:
+    - ${S}/${SS}/${TaskName}.in
+    - ${S}/${SS}/sample.out
+    - test:  [1/1/foo.in, 1/1/sample.out, 1/2/foo.in, 1/2/sample.out, 2/1/foo.in, 2/1/sample.out]
+      marks: [-1, 1, 1]
+  Canada13:
+    - ${TaskName}.${S}-${SS}.in
+    - ${TaskName}.${S}-${SS}.out
+    - test:  [foo.1-1.in, foo.1-1.out, foo.1-2.in, foo.1-2.out, foo.2-1.in, foo.2-1.out]
+      marks: [-1, 1, 1]
+  CEOI11:
+    - ${TaskName}${S}$[SL].in
+    - ${TaskName}${S}$[SL].out
+    - test:  [foo1a.in, foo1a.out, foo1b.in, foo1b.out, foo2.in, foo2.out]
+      marks: [-1, 1, 1]
+  COCI:
+    - ${TaskName}.in.${S}$[SL]
+    - ${TaskName}.out.${S}$[SL]
+    - test:  [foo.in.1a, foo.out.1a, foo.in.1b, foo.out.1b, foo.in.2, foo.out.2]
+      marks: [-1, 1, 1]
+    - test:  [foo.in.1b, foo.out.1b, foo.in.1aa, foo.out.1aa, foo.in.1aj, foo.out.1aj, foo.in.2, foo.out.2, foo.dummy.in.1, foo.dummy.out.1]
+      marks: [-1, -1, 1, 1]
+  IOI10a:
+    - appeal/Subtask${S}-data/grader.in.${SS}
+    - appeal/Subtask${S}-data/grader.expect.${SS}
+    - test:  [appeal/Subtask1-data/grader.in.1, appeal/Subtask1-data/grader.expect.1,
+              appeal/Subtask1-data/grader.in.2, appeal/Subtask1-data/grader.expect.2,
+              appeal/Subtask2-data/grader.in.1, appeal/Subtask2-data/grader.expect.1]
+      marks: [-1, 1, 1]
+  IOI10b:
+    - appeal/Subtask${S}-data/grader.in.${SS}-${S}
+    - appeal/Subtask${S}-data/grader.expect.${SS}-${S}
+    - test:  [appeal/Subtask1-data/grader.in.1-1, appeal/Subtask1-data/grader.expect.1-1,
+              appeal/Subtask1-data/grader.in.2-1, appeal/Subtask1-data/grader.expect.2-1,
+              appeal/Subtask2-data/grader.in.1-2, appeal/Subtask2-data/grader.expect.1-2]
+      marks: [-1, 1, 1]
+  IOI10c:
+    - appeal/Subtask${S}-data/grader.in.${SS}a
+    - appeal/Subtask${S}-data/grader.expect.${SS}a
+    - test:  [appeal/Subtask1-data/grader.in.1a, appeal/Subtask1-data/grader.expect.1a,
+              appeal/Subtask1-data/grader.in.2a, appeal/Subtask1-data/grader.expect.2a,
+              appeal/Subtask2-data/grader.in.1a, appeal/Subtask2-data/grader.expect.1a]
+      marks: [-1, 1, 1]
+  IOI11:
+    - ${TaskName}-test/subtask${S}/grader.in.${SS}
+    - ${TaskName}-test/subtask${S}/grader.expect.${SS}
+    - test:  [foo-test/subtask1/grader.in.1, foo-test/subtask1/grader.expect.1,
+              foo-test/subtask1/grader.in.2, foo-test/subtask1/grader.expect.2,
+              foo-test/subtask2/grader.in.1, foo-test/subtask2/grader.expect.1]
+      marks: [-1, 1, 1]
+  Moscow13:
+    - ${TaskName}${S}/tests/${SS}
+    - ${TaskName}${S}/tests/${SS}.a
+    - test:  [foo1/tests/1, foo1/tests/1.a, foo1/tests/2, foo1/tests/2.a, foo2/tests/1, foo2/tests/1.a]
+      marks: [-1, 1, 1]
+  Piter15:
+    - tests/subtask${S}/${SS}
+    - tests/subtask${S}/${SS}.a
+    - test:  [tests/subtask1/1, tests/subtask1/1.a, tests/subtask1/2,
+              tests/subtask1/2.a, tests/subtask2/1, tests/subtask2/1.a]
+      marks: [-1, 1, 1]

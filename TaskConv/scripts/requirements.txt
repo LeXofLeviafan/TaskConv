@@ -1,0 +1,4 @@
+PyYAML
+pytest
+pyfakefs
+PyInstaller

@@ -1,0 +1,26 @@
+2022/12/25 v2.0		- Rewritten code completely in Python.
+			- Reorganized configuration, made tokens configurable.
+			- Extended letter numbering for multi-letter numbers.
+			- Implemented unit tests including task format testing.
+2015/11/02 v1.2.2	- Modified jar to make Main callable, added run test.
+			- Added javadoc directory.
+2013/08/27 v1.2.1	- Fixed Windows separator parse exception bug.
+			- Fixed confusing messaging behaviour.
+			- Replaced --clean with --keep, making cleaning the
+			default choice; using --keep without --move doesn't
+			result in an error.
+			- Added option --level to allow procesing multiple tasks
+			of the same type at a time.
+2013/08/25 v1.2 	- Rewritten code completely in Java.
+			- Fixed detection, fixed faildetect bug.
+			- Changed default value of --outfile option.
+			- Provided possibility of user input based choice in
+			case of multidetect, added option --auto for reverting
+			to old behaviour.
+			- Added option --workdir for changing output directory.
+			- Added option --clean for removing empty directories
+			after moving files from them.
+2013/08/22 v1.1 	- Added option --infilesonly for tasks without output
+			files.
+			- Fixed faildetect access violation bug.
+2012/05/26 v1.0 	- Initial implementation
