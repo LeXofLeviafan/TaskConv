@@ -1,0 +1,2 @@
+${TaskName}-test/subtask${S}/grader.in.${SS}
+${TaskName}-test/subtask${S}/grader.expect.${SS}

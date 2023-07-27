@@ -1,0 +1,41 @@
+TaskConvertor converts tasks with group tests from known formats in DL test format.
+
+
+USAGE:
+taskconv -h|--help
+taskconv [-v|--verbose] [-m|--move] [-t TaskType|--type=TaskType] [-o OutFile|-output=OutFile]
+         [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir
+
+Options with arguments can be written in following ways:
+ -d TaskDir
+ -dTaskDir
+ --directory=TaskDir
+ --directory TaskDir
+Also you can shorten long options (like "--dir Outfile"), up to one letter long ("--v").
+
+TaskType can be shortened, too - just try to not make it ambiguous (if it is, the program
+will make a guess based on possible variants).
+
+
+Files contained in "DB/" directory are known types. Feel free to add your own (make sure to do it
+the right way though). Format is following:
+
+1st line = input filename pattern
+2nd line = output filename pattern
+Both patterns use '/' character as directory separator.
+
+pattern details:
+	${varname} - variable
+	$[varname] - variable may be omitted (SS or SL only)
+the variables are:
+	TaskName - the name of the task
+	S - testgroup number
+	SS - test number in group
+	SL - test letter in group (Alphabet[SS])
+
+TaskName is the only variable that has nothing to do with test structure itself.
+If the program fails to detect it for some reason, you may set it with "-n" option.
+
+
+File ".cfg" contains characters for path validations:
+	First line contains valid characters for TaskName.
