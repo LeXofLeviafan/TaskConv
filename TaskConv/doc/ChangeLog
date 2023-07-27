@@ -1,3 +1,4 @@
+2023/07/27 v2.0.1	- Implemented const token parser & the special token $|.
 2022/12/25 v2.0		- Rewritten code completely in Python.
 			- Reorganized configuration, made tokens configurable.
 			- Extended letter numbering for multi-letter numbers.

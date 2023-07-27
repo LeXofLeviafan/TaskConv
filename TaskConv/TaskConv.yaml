@@ -15,6 +15,10 @@ tokens:
     key:   test
     regex: '[a-z]+'
     value: letternum
+  dummy:
+    key:   group
+    regex: 'dummy'
+    value: zero
 
 types:
   Baltic11:
@@ -33,12 +37,12 @@ types:
     - test:  [foo1a.in, foo1a.out, foo1b.in, foo1b.out, foo2.in, foo2.out]
       marks: [-1, 1, 1]
   COCI:
-    - ${TaskName}.in.${S}$[SL]
-    - ${TaskName}.out.${S}$[SL]
+    - ${TaskName}.in.${S}$[SL]$|${TaskName}.${dummy}.in.${SS}
+    - ${TaskName}.out.${S}$[SL]$|${TaskName}.${dummy}.out.${SS}
     - test:  [foo.in.1a, foo.out.1a, foo.in.1b, foo.out.1b, foo.in.2, foo.out.2]
       marks: [-1, 1, 1]
     - test:  [foo.in.1b, foo.out.1b, foo.in.1aa, foo.out.1aa, foo.in.1aj, foo.out.1aj, foo.in.2, foo.out.2, foo.dummy.in.1, foo.dummy.out.1]
-      marks: [-1, -1, 1, 1]
+      marks: [1, -1, -1, 1, 1]
   IOI10a:
     - appeal/Subtask${S}-data/grader.in.${SS}
     - appeal/Subtask${S}-data/grader.expect.${SS}

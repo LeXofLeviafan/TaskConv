@@ -5,8 +5,8 @@ from functools import reduce
 from glob import glob
 import re, yaml, os, shutil, sys
 
-VERSION = "2.0"
-TOKEN = r"(?i)\$(\{[a-z]+\}|\[[a-z]+\])"
+VERSION = "2.0.1"
+TOKEN = r"(?i)\$(\||\{[a-z]+\}|\[[a-z]+\])"
 TOKEN_NAME = r"(?i)[a-z]+$"
 ABC = ''.join(chr(i) for i in range(ord('a'), ord('z')+1))
 CWD = os.getcwd()
@@ -15,25 +15,33 @@ def letternum (s):
     digits = [ABC.index(c)+1 for c in s.lower()]
     return reduce(lambda acc, x: acc*len(ABC)+x, digits, 0)
 
-valparser = lambda k: {'int': int, 'letternum': letternum}.get(k, str)
+const = lambda n: (lambda s: n)
+PARSERS = {'int': int, 'letternum': letternum, 'zero': const(0)}
+valparser = lambda k: PARSERS.get(k, str)
+
+def split_list (separator, items): # ('|', ["foo", "bar", '|', "baz"]) -> [["foo", "bar"], ["baz"]]
+    items = list(items)
+    split = [i+1 for i, x in enumerate(items) if x == "|"]
+    return [items[i:j-1] for i, j in zip([0]+split, split+[len(items)+1])]
 
 
 ## file matching
 
-def match_file (filename, pattern, tokens, previous={}):
-    match = pattern.match(filename)
-    if not match:
-        return None
-    res = {}
-    for k, v in match.groupdict().items():
-        k, v = tokens[k]['key'], v and valparser( tokens[k].get('value') )(v)
-        if v and res.get(k, v) != v:
-            return None
-        res[k] = v
-    for k in sorted(res):
-        if k in previous and previous[k] != res[k]:
-            raise ValueError("File \"%s\" is detected with a changed value of '%s'." % (filename, k))
-    return res
+def match_file (filename, patterns, tokens, previous={}):
+    for pattern in patterns:
+        match = pattern.match(filename)
+        if not match:
+            continue
+        res = {}
+        for k, v in match.groupdict().items():
+            k, v = tokens[k]['key'], v and valparser( tokens[k].get('value') )(v)
+            if v and res.get(k, v) != v:
+                return None
+            res[k] = v
+        for k in sorted(res):
+            if k in previous and previous[k] != res[k]:
+                raise ValueError("File \"%s\" is detected with a changed value of '%s'." % (filename, k))
+        return res
 
 def match_files (tasks, tokens, typename, infile, outfile, *, infiles_only=False, **kwargs):
     ins, outs, fixed = {}, {}, {it['key'] for it in tokens.values() if it.get('fixed')}
@@ -68,6 +76,9 @@ def tokenize (pattern, tokens):
     for i, s in enumerate( re.split(TOKEN, pattern) ):
         if i % 2 == 0:  # even matches are text literals
             yield re.escape(s)
+        elif s == "|":  # special '|' token for splitting (RESETS KEYS CACHE)
+            keys = []
+            yield s
         else:           # odd matches are tokens
             optional = (s[0] == "[")
             k = s[1:-1]
@@ -77,7 +88,7 @@ def tokenize (pattern, tokens):
             yield (("(?P={})" if k in keys else "(?P<{}>{})") + ("?" if optional else "")).format(k, token['regex'])
             keys += [k]
 
-parser = lambda pattern, tokens: re.compile("(?i)%s$" % "".join( tokenize(pattern, tokens) ))
+parser = lambda pattern, tokens: [re.compile("(?i)%s$" % "".join(xs)) for xs in split_list("|", tokenize(pattern, tokens))]
 
 def load_config (config, **kwargs):
     data = yaml.load(config, yaml.Loader)

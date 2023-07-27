@@ -2,13 +2,14 @@
 from pytest import raises, mark, fixture
 import os, shutil, re, json, yaml, sys
 
-from TaskConv import CWD, letternum, tokenize, parser, load_config, match_file, match_files, sort_matches, process
+from TaskConv import CWD, letternum, split_list, tokenize, parser, load_config, match_file, match_files, sort_matches, process
 
 S = (r"\/" if sys.version_info < (3, 4) else "/")
 TOKENS = {'TaskName': {'key': 'name',  'regex': "[a-z]+", 'fixed': True},
           'S':        {'key': 'group', 'regex': "[0-9]+", 'value': 'int'},
           'SS':       {'key': 'test',  'regex': "[0-9]+", 'value': 'int'},
-          'SL':       {'key': 'test',  'regex': "[a-z]+", 'value': 'letternum'}}
+          'SL':       {'key': 'test',  'regex': "[a-z]+", 'value': 'letternum'},
+          'dummy':    {'key': 'group', 'regex': "dummy",  'value': 'zero'}}
 
 
 @mark.parametrize("string, number", [
@@ -21,9 +22,21 @@ def test_letternum (string, number):
     assert letternum(string) == number
 
 
+@mark.parametrize("separator, items, result", [
+    ("|", [], [[]]),
+    ("|", ["foo", "bar", "baz"], [["foo", "bar", "baz"]]),
+    ("|", ["foo|", "|bar", "|", "ba|z"], [["foo|", "|bar"], ["ba|z"]]),
+    ("|", ["|", "foo", "bar", "|", "baz", "|"], [[], ["foo", "bar"], ["baz"], []]),
+])
+def test_split_list (separator, items, result):
+    assert split_list(separator, items) == result
+
+
 @mark.parametrize("pattern, result", [
     ("x",                                            ["x"]),
-    ("${TaskName}.in.${S}$[SL]",                     ["", r"(?P<TaskName>[a-z]+)", r"\.in\.", r"(?P<S>[0-9]+)", "", r"(?P<SL>[a-z]+)?", ""]),
+    ("${TaskName}.in.${S}$[SL]$|${TaskName}.${dummy}.in.${SS}",
+     ["", r"(?P<TaskName>[a-z]+)", r"\.in\.", r"(?P<S>[0-9]+)", "", r"(?P<SL>[a-z]+)?", "", "|",
+      "", r"(?P<TaskName>[a-z]+)", r"\.", r"(?P<dummy>dummy)", r"\.in\.", r"(?P<SS>[0-9]+)", ""]),
     ("appeal/Subtask${S}-data/grader.in.${SS}-${S}",
      ["appeal%sSubtask" % S, r"(?P<S>[0-9]+)", r"\-data%sgrader\.in\." % S, r"(?P<SS>[0-9]+)", r"\-", r"(?P=S)", ""]),
 ])
@@ -32,12 +45,13 @@ def test_tokenize (pattern, result):
 
 
 @mark.parametrize("pattern, result", [
-    ("x",                                            r"(?i)x$"),
-    ("${TaskName}.in.${S}$[SL]",                     r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9]+)(?P<SL>[a-z]+)?$"),
-    ("appeal/Subtask${S}-data/grader.in.${SS}-${S}", r"(?i)appeal%sSubtask(?P<S>[0-9]+)\-data%sgrader\.in\.(?P<SS>[0-9]+)\-(?P=S)$" % (S, S)),
+    ("x",                                            [r"(?i)x$"]),
+    ("${TaskName}.in.${S}$[SL]$|${TaskName}.${dummy}.in.${SS}", [r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9]+)(?P<SL>[a-z]+)?$",
+                                                                 r"(?i)(?P<TaskName>[a-z]+)\.(?P<dummy>dummy)\.in\.(?P<SS>[0-9]+)$"]),
+    ("appeal/Subtask${S}-data/grader.in.${SS}-${S}", [r"(?i)appeal%sSubtask(?P<S>[0-9]+)\-data%sgrader\.in\.(?P<SS>[0-9]+)\-(?P=S)$" % (S, S)]),
 ])
 def test_parser (pattern, result):
-    assert parser(pattern, TOKENS).pattern == result
+    assert [x.pattern for x in parser(pattern, TOKENS)] == result
 
 
 @mark.parametrize("config, kwargs, result", [
@@ -53,10 +67,11 @@ def test_parser (pattern, result):
      tokens: %s
      types:
        foo:
-         - ${TaskName}.in.${S}$[SL]
+         - ${TaskName}.in.${S}$[SL]$|${TaskName}.${dummy}.in.${SS}
          - appeal/Subtask${S}-data/grader.in.${SS}-${S}""" % json.dumps(TOKENS), {},
-     (TOKENS, {'foo': (re.compile(r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9]+)(?P<SL>[a-z]+)?$"),
-                       re.compile(r"(?i)appeal%sSubtask(?P<S>[0-9]+)\-data%sgrader\.in\.(?P<SS>[0-9]+)\-(?P=S)$" % (S, S)))})),
+     (TOKENS, {'foo': ([re.compile(r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9]+)(?P<SL>[a-z]+)?$"),
+                        re.compile(r"(?i)(?P<TaskName>[a-z]+)\.(?P<dummy>dummy)\.in\.(?P<SS>[0-9]+)$")],
+                       [re.compile(r"(?i)appeal%sSubtask(?P<S>[0-9]+)\-data%sgrader\.in\.(?P<SS>[0-9]+)\-(?P=S)$" % (S, S))])})),
 ])
 def test_load_config (config, kwargs, result):
     if not isinstance(result, Exception):
@@ -77,16 +92,17 @@ def test_load_config (config, kwargs, result):
     (r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9+])(?P<SL>[a-z]+)?$", "kruhologija.in.2aj", {}, {'name': "kruhologija", 'group': 2, 'test': 36}),
     (r"(?i)(?P<TaskName>[a-z]+)\.in\.(?P<S>[0-9+])(?P<SL>[a-z]+)?$", "kruhologija.in.2aj", {'name': "foo"},
      ValueError("File \"kruhologija.in.2aj\" is detected with a changed value of 'name'.")),
+    (r"(?i)(?P<TaskName>[a-z]+)\.(?P<dummy>dummy)\.in\.(?P<SS>[0-9+])$", "kruhologija.dummy.in.2", {}, {'name': "kruhologija", 'group': 0, 'test': 2}),
     (r"(?i)(?P<SS>[0-9]+)-(?P<SL>[a-z]+)$", "3-c", {}, {'test': 3}),
     (r"(?i)(?P<SS>[0-9]+)-(?P<SL>[a-z]+)$", "3-d", {}, None),
 ])
 def test_match_file (regex, filename, previous, result):
     pattern = re.compile(regex)
     if not isinstance(result, Exception):
-        assert match_file(filename, pattern, TOKENS, previous) == result
+        assert match_file(filename, [pattern], TOKENS, previous) == result
     else:
         with raises(type(result), match=str(result)):
-            match_file(filename, pattern, TOKENS, previous)
+            match_file(filename, [pattern], TOKENS, previous)
 
 @mark.parametrize("tasks, patterns, kwargs, result", [
     ({".": ["foo.in.1", "foo.out.2a", "foo.in.2b", "problem.xml", "foo.out.2b", "foo.in.2a", "foo.out.1", "foo.in.3aj", "foo.out.3aj"]},
