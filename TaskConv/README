@@ -1,5 +1,5 @@
 TaskConvertor converts tasks with group tests from known formats in DL test format.
-Version 1.2.1
+Version 1.2.2
 
 
 usage: TaskConv {-h|[-d] <path>} [[-w] <path>] [options]
@@ -78,3 +78,7 @@ If the task was detected to be of more than one type, the program sort types by 
 detected input files (if -i was used) or input/output file pairs (otherwise). After that, if
 program is running in automatic mode (-a), it will just choose the type with the maximum number of
 detected files; otherwise it will ask user for input (0 to cancel, 1 is default type, etc).
+
+
+The code was adjusted to be called from external Java code. Main now implements Callable<String>,
+which throws RageExitException instead of stopping JVM. An example can be found in 'test/'.

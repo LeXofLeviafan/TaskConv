@@ -5,7 +5,7 @@ import org.apache.commons.cli.*;
 /**
  * Commandline options.
  * @author Alexey Gulenko
- * @version 1.2.1
+ * @version 1.2.2
  */
 public enum Arguments {
     AUTO('a', "auto", null, "decide on task type automatically if result is ambiguous"),
@@ -78,7 +78,6 @@ public enum Arguments {
      */
     public static final void printUsage() {
         new HelpFormatter().printHelp(CMD_LINE_SYNTAX, options);
-        System.exit(0);
     }
 
     /**
@@ -92,10 +91,12 @@ public enum Arguments {
             result = new PosixParser().parse(options, args);
             if (result.hasOption(HELP.toChar())) {
                 printUsage();
+                return null;
             }
         } catch (ParseException e) {
             System.out.println(e.getLocalizedMessage());
             printUsage();
+            return null;
         }
         return result;
     }

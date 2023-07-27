@@ -5,18 +5,16 @@ import org.apache.commons.io.FileUtils;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.Charset;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.Callable;
 
 /**
  * Converts tasks with group tests from known formats in DL test format.
  * @author Alexey Gulenko
- * @version 1.2.1
+ * @version 1.2.2
  */
-public class Main {
+public class Main implements Callable<String> {
 
     /** Configuration data. */
     private final Config config;
@@ -36,14 +34,25 @@ public class Main {
      * @param args    commandline arguments
      * @return application class instance
      */
-    private static Main init(final String[] args) {
-        return new Main(new Config(args));
+    private static Main init(final String[] args) throws RageExitException {
+        return new Main( new Config(args) );
+    }
+
+    /**
+     * Receives configuration data.
+     * @param workDir application base dir (with config files)
+     * @param args    commandline arguments
+     * @return application class instance
+     */
+    public static Main init(final File workDir, final String... args) throws RageExitException {
+        return new Main( new Config(args, workDir) );
     }
 
     /**
      * Determines task type.
+     * @return task type name
      */
-    private void body() {
+    private String body () throws RageExitException {
         config.verboseMessage("");
         String[][] files = getFileList();
         List<TaskType> taskTypes = new ArrayList<TaskType>(files.length);
@@ -61,20 +70,21 @@ public class Main {
         if (taskTypes.size() == 1) {
             type = taskTypes.get(0);
             config.regularMessage(Config.DETECTED + type.getName());
-            return;
+            return type.getName();
         }
         Collections.sort(taskTypes);
         Collections.reverse(taskTypes);
         if (config.isAutoOn()) {
             type = taskTypes.get(0);
             config.regularMessage(taskTypes.size() + Config.ASSUMING + type.getName());
-            return;
+            return type.getName();
         }
         type = choice(taskTypes);
         if (type == null) {
-            System.out.println("Received exit command");
-            System.exit(0);
+            config.regularMessage("Received exit command");
+            return null;
         }
+        return type.getName();
     }
 
     /**
@@ -101,7 +111,7 @@ public class Main {
      * @param <T>      class of items to choose from
      * @return selected item if any
      */
-    private <T> T choice(List<T> items) {
+    private <T> T choice (List<T> items) throws RageExitException {
         System.out.flush();
         System.out.flush();
         System.out.println("More than one type was detected. Asking for input.");
@@ -144,7 +154,8 @@ public class Main {
      * @param oldName    old file name
      * @param newName    new file name
      */
-    private void doFile (final String fro, final String oldName, final String to, final String newName) {
+    private void doFile (final String fro, final String oldName, final String to, final String newName)
+            throws RageExitException {
         final Path oldPath = Paths.get(fro + oldName);
         final Path newPath = Paths.get(to + newName);
         try {
@@ -156,6 +167,19 @@ public class Main {
             config.verboseMessage("\"" + oldName + "\" " + config.getArrow() + " \"" + newName + "\"");
         } catch (IOException e) {
             config.rageExit("Failed to copy/move files");
+        }
+    }
+
+    /**
+     * Tests if directory is empty
+     * @param directory    directory path
+     * @return true if empty
+     */
+    public static boolean isDirEmpty (final Path directory) {
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(directory)) {
+            return !stream.iterator().hasNext();
+        } catch (IOException e) {
+            return false;
         }
     }
 
@@ -172,7 +196,7 @@ public class Main {
             }
         }
         try {
-            if (Files.deleteIfExists(file.toPath())) {
+            if (isDirEmpty(file.toPath()) && Files.deleteIfExists(file.toPath())) {
                 config.verboseMessage("Removed empty directory: \"" + file + "\".");
             }
         } catch (DirectoryNotEmptyException e) {
@@ -186,7 +210,7 @@ public class Main {
      * Does moving/copying and calculates marks.
      * @return marks list
      */
-    private String[][] doFiles() {
+    private String[][] doFiles () throws RageExitException {
         final String taskDir = config.getTaskDir();
         final String workDir = config.getWorkDir();
         final String[] tasks = config.getTasks();
@@ -223,7 +247,7 @@ public class Main {
     /**
      * Processing files and printing out results.
      */
-    private void pout() {
+    private void pout () throws RageExitException {
         config.verboseMessage("");
         final String[][] marks = doFiles();
         config.verboseMessage("");
@@ -250,12 +274,26 @@ public class Main {
     }
 
     /**
+     * Functionality implementation.
+     * @return determined task type name (null if cancelled manually)
+     */
+    public String call() throws RageExitException {
+        final String result = body();
+        if (result != null)
+            pout();
+        return result;
+    }
+
+    /**
      * Runner method.
      * @param args    commandline arguments
      */
-    public static void main(final String[] args) {
-        Main app = init(args);
-        app.body();
-        app.pout();
+    public static void main (final String[] args) {
+        try {
+            Main app = init(args);
+            app.call();
+        } catch (RageExitException e) {
+            System.exit(1);
+        }
     }
 }

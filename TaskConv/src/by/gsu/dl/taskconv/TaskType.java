@@ -10,7 +10,7 @@ import java.util.*;
 /**
  * Task type data.
  * @author Alexey Gulenko
- * @version 1.2.1
+ * @version 1.2.2
  */
 public class TaskType implements Comparable<TaskType> {
 
@@ -26,7 +26,8 @@ public class TaskType implements Comparable<TaskType> {
     /** Type configuration file lines info. */
     private enum TypeLines {
         INPUT_FILES(0),
-        OUTPUT_FILES(1);
+        OUTPUT_FILES(1),
+        CONFIG_LINE(2);
         private final int line;
         private TypeLines(int lineNumber) {
             line = lineNumber;
@@ -52,6 +53,18 @@ public class TaskType implements Comparable<TaskType> {
     public FilePattern.FileProcessed[][] getOutFiles() { return outFiles; }
     /** Total number of detected files. */
     private Integer filesNum;
+    /** AutoSum option. */
+    private Integer autosum;
+    /** Getter method for {@link #autosum} */
+    public Integer getAutosum() { return autosum; };
+    /** List of group items. */
+    private String[] groupItems;
+    /** Getter method for {@link #groupItems} */
+    public String[] getGroupItems() { return groupItems; };
+    /** Pattern for group items. */
+    private String groupPattern;
+    /** Getter method for {@link #groupPattern} */
+    public String getGroupPattern() { return groupPattern; };
 
     /**
      * Private constructor.
@@ -68,14 +81,18 @@ public class TaskType implements Comparable<TaskType> {
      * @param files     set of files to match
      * @return TaskType instance for given type, if it's valid
      */
-    public static TaskType process(final File path, final Config config, final String[][] files) {
+    public static TaskType process(final File path, final Config config, final String[][] files)
+            throws RageExitException {
         TaskType type = new TaskType(path.getName());
         config.verboseMessage("Checking task type \"" + type.name + "\"...");
         try {
             List<String> lines = Files.readAllLines(path.toPath(), Charset.defaultCharset());
+            try {
+                parseCfg(lines.subList(TypeLines.CONFIG_LINE.number(), lines.size()), type);
+            } catch (IndexOutOfBoundsException e) {}
             //System.out.println(lines);
-            type.infilePattern = FilePattern.process(lines.get(TypeLines.INPUT_FILES.number()), config);
-            type.outfilePattern = FilePattern.process(lines.get(TypeLines.OUTPUT_FILES.number()), config);
+            type.infilePattern = FilePattern.process(lines.get(TypeLines.INPUT_FILES.number()), type, config);
+            type.outfilePattern = FilePattern.process(lines.get(TypeLines.OUTPUT_FILES.number()), type, config);
             if (type.infilePattern == null || type.outfilePattern == null) {
                 System.out.println("Incorrect task type: \"" + type.name + "\".");
                 return null;
@@ -93,6 +110,47 @@ public class TaskType implements Comparable<TaskType> {
         }
         config.verboseMessage("Task type \"" + type.name + "\": passed.");
         return type;
+    }
+
+    private static void parseCfg(List<String> lines, TaskType type) throws IOException {
+        for (int i = 0;  i < lines.size(); i++) {
+            String[] tokens = lines.get(i).trim().split("\\s*");
+            if (tokens.length == 0)
+                continue;
+            switch (tokens[0]) {
+                case "AUTOSUM":
+                    if (tokens.length != 2)
+                        throw new IOException("Incorrect AUTOSUM option (bad number of arguments).");
+                    try {
+                        type.autosum = Integer.parseInt(tokens[1]);
+                    } catch (Exception e) {
+                        throw new IOException("Incorrect AUTOSUM option (failed to parse integer argument).");
+                    }
+                    break;
+                case "SET":
+                    if (tokens.length < 2)
+                        throw new IOException("Incorrect SET option (bad number of arguments).");
+                    if (tokens[1].startsWith("{")) {
+                        int first = 1,  last = tokens.length-1;
+                        if (!tokens[last].endsWith("}"))
+                            throw new IOException("Incorrect SET option (bad number of arguments).");
+                        tokens[1] = tokens[1].replaceFirst("{", "");
+                        if (tokens[first] == "")
+                            first++;
+                        tokens[last] = tokens[last].substring(0, tokens[last].lastIndexOf("}"));
+                        if (tokens[last] == "")
+                            last--;
+                        if (first > last)
+                            throw new IOException("Incorrect SET option (bad values list).");
+                        type.groupItems = Arrays.copyOfRange(tokens, first, last+1);
+                    } else {
+                        if (tokens.length != 2)
+                            throw new IOException("Incorrect SET option (bad number of arguments).");
+                        type.groupPattern = tokens[1];
+                    }
+                    break;
+            }
+        }
     }
 
     /**

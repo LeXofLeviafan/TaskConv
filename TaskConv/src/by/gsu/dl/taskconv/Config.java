@@ -18,7 +18,7 @@ import java.util.regex.Pattern;
 /**
  * Configuration data.
  * @author Alexey Gulenko
- * @version 1.2.1
+ * @version 1.2.2
  */
 public class Config {
 
@@ -66,8 +66,12 @@ public class Config {
 
     /** Types DB dir. */
     private static final String DATA_DIR = "./DB/";
+    /** Types DB dir. */
+    private final String dataDir;
     /** File with changeable values. */
     private static final String CFG = ".cfg";
+    /** File with changeable values. @see CFG */
+    private final String cfg;
 
     /** Letters (${SL}). */
     public static final String LETTERS = "a-z";
@@ -140,7 +144,7 @@ public class Config {
      */
     private List<String> getCfg() {
         try {
-            List <String> lines = Files.readAllLines(Paths.get(CFG), Charset.defaultCharset());
+            List <String> lines = Files.readAllLines(Paths.get(cfg), Charset.defaultCharset());
             if (lines.isEmpty()) {
                 lines.add("");
             }
@@ -160,19 +164,35 @@ public class Config {
      * Reads configuration from environment.
      * @param args    application argument list
      */
-    public Config(final String[] args) {
+    public Config(final String[] args) throws RageExitException {
+        this(args, null);
+    }
+
+    /**
+     * Reads configuration from environment.
+     * @param args    application argument list
+     * @param workDir application base dir (with config files)
+     */
+    public Config(final String[] args, final File workDir) throws RageExitException {
+        String workPath = "";
+        if (workDir != null)
+            workPath = workDir.getPath() + "/";
+        dataDir = workPath + DATA_DIR;
+        cfg = workPath + CFG;
         processArgs(args);
         List<String> cfg = getCfg();
         abc = '[' + cfg.get(CfgLines.ABC.number()) + ']';
-        prepareVals();
+        prepareValues();
     }
 
     /**
      * Process commandline arguments.
      * @param args    commandline arguments
      */
-    private void processArgs(final String[] args) {
+    private void processArgs(final String[] args) throws RageExitException {
         CommandLine arguments = Arguments.parse(args);
+        if (arguments == null)
+            throw new RageExitException("Printing usage mode");
         for (Arguments option : Arguments.values()) {
             if (!arguments.hasOption(option.toChar())) {
                 continue;
@@ -197,7 +217,7 @@ public class Config {
     /**
      * Prepares values for execution.
      */
-    private void prepareVals() {
+    private void prepareValues() throws RageExitException {
         // taskDir
         if (taskDir == null || "".equals(taskDir)) {
             rageExit(Errors.NO_DIR, true);
@@ -287,7 +307,7 @@ public class Config {
      * @param option    option commandline argument
      * @param value     option value
      */
-    private void setString(final Arguments option, final String value) {
+    private void setString(final Arguments option, final String value) throws RageExitException {
         switch (option) {
             case TASK_TYPE:
                 taskType = value;
@@ -334,14 +354,14 @@ public class Config {
      * @param message    message to print
      */
     public void regularMessage(final String message) {
-        if (!verbosity.equals(Verbosity.QUIET)) {
+        if (verbosity != Verbosity.QUIET) {
             System.out.println(message);
         }
     }
 
     /** Checks if verbosity is set to verbose. */
     public void verboseMessage(final String message) {
-        if (verbosity.equals(Verbosity.VERBOSE)) {
+        if (verbosity == Verbosity.VERBOSE) {
             System.out.println(message);
         }
     }
@@ -352,11 +372,11 @@ public class Config {
      */
     public File[] getTaskTypes() {
         FileFilter filter = new WildcardFileFilter(taskType, IOCase.INSENSITIVE);
-        return new File(DATA_DIR).listFiles(filter);
+        return new File(dataDir).listFiles(filter);
     }
 
     /**
-     * Replacess all occurrences of {@link File#separator} with {@link #SL}.
+     * Replaces all occurrences of {@link File#separator} with {@link #SL}.
      * @param path    path to be normalized
      * @return normalized path
      */
@@ -371,7 +391,7 @@ public class Config {
      * Sets task directory.
      * @param value option value
      */
-    private void setTaskDir(final String value) {
+    private void setTaskDir(final String value) throws RageExitException {
         if (taskDir != null) {
             rageExit(Errors.TOO_MANY+" { --" + Arguments.DIRECTORY + "=\"" + value + "\" }");
         }
@@ -382,7 +402,7 @@ public class Config {
      * Sets task or work directory.
      * @param value option value
      */
-    private void setTaskOrWorkDir(final String value) {
+    private void setTaskOrWorkDir(final String value) throws RageExitException {
         if (taskDir == null) {
             taskDir = value;
             return;
@@ -402,7 +422,7 @@ public class Config {
      * @return list of subdirectories
      */
     private List<String> generateDirs(final String root, final String parent, final int depth) {
-        final List<String> result = new ArrayList<String>();
+        final List<String> result = new ArrayList<>();
         if (depth == 0) {
             result.add(parent);
             return result;
@@ -442,27 +462,29 @@ public class Config {
      * Stops execution with an error message.
      * @param error Error message.
      */
-    public void rageExit(final String error) {
+    public void rageExit(final String error) throws RageExitException {
         regularMessage(error);
-        System.exit(1);
+        //System.exit(1);
+        throw new RageExitException(error);
     }
     /**
      * Stops execution with an error message.
      * @param error    error message
      * @param usage    true if usage info needed
      */
-    private void rageExit(final Errors error, boolean usage) {
+    private void rageExit(final Errors error, boolean usage) throws RageExitException {
         regularMessage(error+"");
         if (usage && !verbosity.equals(Verbosity.QUIET)) {
             Arguments.printUsage();
         }
-        System.exit(1);
+        //System.exit(1);
+        throw new RageExitException(error+"");
     }
     /**
      * Stops execution with an error message.
      * @param error    error message
      */
-    public void rageExit(final Errors error) {
+    public void rageExit(final Errors error) throws RageExitException {
         rageExit(error, false);
     }
 }

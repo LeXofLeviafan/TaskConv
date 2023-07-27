@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 /**
  * File pattern for task types.
  * @author Alexey Gulenko
- * @version 1.2.1
+ * @version 1.2.2
  */
 public class FilePattern {
 
@@ -17,7 +17,10 @@ public class FilePattern {
         TASK_NAME("TaskName"),
         GROUP_NUMBER("S"),
         TEST_NUMBER("SS"),
-        TEST_LETTER("SL");
+        TEST_LETTER("SL"),
+        TEST_GLOBAL("T"),
+        SET("SET"),
+        REGEX(null);
 
         private final String value;
         private Elements(final String theValue) {
@@ -63,8 +66,8 @@ public class FilePattern {
      * @param config configuration
      * @return FilePattern instance if the pattern is correct, null otherwise
      */
-    public static FilePattern process(final String pattern, final Config config) {
-        String[] patternData = makeRegexPattern(pattern, config);
+    public static FilePattern process(final String pattern, final TaskType type, final Config config) {
+        String[] patternData = makeRegexPattern(pattern, type, config);
         if (patternData == null) {
             config.regularMessage("Pattern is incorrect: \"" + pattern + "\".");
             return null;
@@ -78,12 +81,12 @@ public class FilePattern {
      * @param config config data
      * @return array: [0] is regexp, others are group names
      */
-    private static String[] makeRegexPattern(final String basePattern, final Config config) {
+    private static String[] makeRegexPattern(final String basePattern, final TaskType type, final Config config) {
         String remains = basePattern;
         List<String> result = new ArrayList<String>();
         result.add("(?i)");
         while (!remains.isEmpty()) {
-            String[] tokens = splitToken(remains, config);
+            String[] tokens = splitToken(remains, type, config);
             if (tokens == null) {
                 return null;
             }
@@ -103,10 +106,12 @@ public class FilePattern {
      * @param config    configuration
      * @return {token, group, groupName, leftover}
      */
-    private static String[] splitToken(final String s, final Config config) {
-        String token, group, groupName, after;
+    private static String[] splitToken(final String s, final TaskType type, final Config config) {
+        String token, group, groupName, after = null;
+        boolean literal = false;
         int tokenLength = s.indexOf("${");
         int tokenLength1 = s.indexOf("$[");
+        int tokenLength2 = s.indexOf("^");
         char groupLimiter = '}';
         boolean groupRequired = true;
         if (tokenLength < 0 || (tokenLength1 >= 0 && tokenLength1 < tokenLength)) {
@@ -114,17 +119,30 @@ public class FilePattern {
             groupLimiter = ']';
             groupRequired = false;
         }
+        if (tokenLength < 0 || (tokenLength2 >= 0 && tokenLength2 < tokenLength)) {
+            tokenLength = tokenLength2;
+            groupLimiter = '$';
+            groupRequired = true;
+            after = s.substring(tokenLength + "^".length());
+            literal = true;
+        }
         if (tokenLength < 0) {
             return new String[] {Pattern.quote(s), null, ""};
         }
-        after = s.substring(tokenLength + "${".length());
+        if (after == null)
+            after = s.substring(tokenLength + "${".length());
         int groupLength = after.indexOf(groupLimiter);
         if (groupLength < 0) {
             return null;
         }
         token = Pattern.quote(s.substring(0, tokenLength));
-        groupName = after.substring(0, groupLength);
-        group = calcGroup(groupName, groupRequired, config);
+        if (literal) {
+            groupName = null;
+            group = after.substring(0, groupLength);
+        } else {
+            groupName = after.substring(0, groupLength);
+            group = calcGroup(groupName, groupRequired, literal, config);
+        }
         if (group == null) {
             return null;
         }
@@ -139,14 +157,18 @@ public class FilePattern {
      * @param config           configuration
      * @return group regexp
      */
-    private static String calcGroup(final String groupName, final boolean groupRequired, final Config config) {
+    private static String calcGroup(final String groupName, final boolean groupRequired,
+                                    final boolean literal, final Config config) {
         String group = "";
         Elements element = null;
-        for (Elements item : Elements.values()) {
-            if (groupName.equals(item.toString())) {
-                element = item;
+        if (literal)
+            element = Elements.REGEX;
+        else
+            for (Elements item : Elements.values()) {
+                if (groupName.equals(item.toString())) {
+                    element = item;
+                }
             }
-        }
         if (element == null) {
             return null;
         }

@@ -1,0 +1,2 @@
+${TaskName}.in.${S}$[SL]
+${TaskName}.out.${S}$[SL]

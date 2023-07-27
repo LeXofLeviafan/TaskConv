@@ -1,3 +1,5 @@
+2015/11/02 v1.2.2	- Modified jar to make Main callable, added run test.
+			- Added javadoc directory.
 2013/08/27 v1.2.1	- Fixed Windows separator parse exception bug.
 			- Fixed confusing messaging behaviour.
 			- Replaced --clean with --keep, making cleaning the
