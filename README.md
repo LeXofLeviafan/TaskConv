@@ -1,7 +1,7 @@
 # TaskConv
 DL tool for converting programming task types into DL format
 
-(This is the original Pascal implementation.)
+(This is the Java reimplementation.)
 
 ## Documentation
 

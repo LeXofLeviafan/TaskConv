@@ -1,3 +1,12 @@
+2013/08/25 v1.2 	- Rewritten code completely in Java.
+			- Fixed detection, fixed faildetect bug.
+			- Changed default value of --outfile option.
+			- Provided possibility of user input based choice in
+			case of multidetect, added option --auto for reverting
+			to old behaviour.
+			- Added option --workdir for changing output directory.
+			- Added option --clean for removing empty directories
+			after moving files from them.
 2013/08/22 v1.1 	- Added option --infilesonly for tasks without output
 			files.
 			- Fixed faildetect access violation bug.

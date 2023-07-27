@@ -1,20 +1,41 @@
 TaskConvertor converts tasks with group tests from known formats in DL test format.
+Version 1.2
 
 
-USAGE:
-taskconv -h|--help
-taskconv [-v|--verbose] [-m|--move] [-t TaskType|--type=TaskType] [-o OutFile|-output=OutFile]
-         [-i|--infilesonly] [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir
+usage: TaskConv {-h|[-d] <path>} [[-w] <path>] [options]
+ -a,--auto                decide on task type automatically if result is
+                          ambiguous
+ -c,--clean               when used with move, remove empty directories
+                          recursively from task directory after processing
+                          files
+ -d,--directory <path>    task directory (required)
+ -h,--help                print this message
+ -i,--infiles-only        allow for zero output files
+ -m,--move                move files instead of copying
+ -n,--name <taskname>     task name (used for sake of convenience)
+ -o,--output <filename>   output filename (result); default is "marks.txt"
+ -q,--quiet               suppress messages
+ -t,--type <prefix>       required prefix of the task type (IOI, CEOI etc)
+ -v,--verbose             verbose output
+ -w,--workdir <path>      output directory
+
 
 Options with arguments can be written in following ways:
  -d TaskDir
  -dTaskDir
  --directory=TaskDir
  --directory TaskDir
-Also you can shorten long options (like "--dir Outfile"), up to one letter long ("--v").
+Also you can write short options together:
+ TaskConv -mvco test.txt --directory taskpath
 
-TaskType can be shortened, too - just try to not make it ambiguous (if it is, the program
-will make a guess based on possible variants).
+TaskType is a required prefix for task type names. That is, "-t IOI" will limit program's choice
+to the type names beginning with "IOI": "IOI", "IOI11", "IOI10a", "IOI 2013", etc.
+
+You may also use loose arguments (without options); such arguments are processed after all others
+by following rules:
+ - if task directory (-d) wasn't set, argument is considered to describe it
+ - otherwise, if output directory (-w) wasn't set, argument is considered to describe it
+ - otherwise the argument is illegal and the program will refuse to work
 
 
 Files contained in "DB/" directory are known types. Feel free to add your own (make sure to do it
@@ -36,6 +57,15 @@ the variables are:
 TaskName is the only variable that has nothing to do with test structure itself.
 If the program fails to detect it for some reason, you may set it with "-n" option.
 
+Optional file ".cfg" contains characters for path validations:
+	First line contains valid characters for TaskName (default is latin alphabet).
+Path validation is case insensitive.
 
-File ".cfg" contains characters for path validations:
-	First line contains valid characters for TaskName.
+
+If the task wasn't detected to be of any type whatsoever, the program will refuse to work. You may
+want to try verbose output (-v) to find out why this happened.
+
+If the task was detected to be of more than one type, the program sort types by the number of
+detected input files (if -i was used) or input/output file pairs (otherwise). After that, if
+program is running in automatic mode (-a), it will just choose the type with the maximum number of
+detected files; otherwise it will ask user for input (0 to cancel, 1 is default type, etc).
