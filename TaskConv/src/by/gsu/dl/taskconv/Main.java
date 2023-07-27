@@ -3,7 +3,6 @@ package by.gsu.dl.taskconv;
 import org.apache.commons.io.FileUtils;
 
 import java.io.File;
-import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.DirectoryNotEmptyException;
@@ -15,7 +14,7 @@ import java.util.*;
 /**
  * Converts tasks with group tests from known formats in DL test format.
  * @author Alexey Gulenko
- * @version 1.2
+ * @version 1.2.1
  */
 public class Main {
 
@@ -45,9 +44,9 @@ public class Main {
      * Determines task type.
      */
     private void body() {
-        List<File> files = getFileList();
-        //System.out.println(files);
-        List<TaskType> taskTypes = new ArrayList<TaskType>(files.size());
+        config.verboseMessage("");
+        String[][] files = getFileList();
+        List<TaskType> taskTypes = new ArrayList<TaskType>(files.length);
         for (File typeFile : config.getTaskTypes()) {
             TaskType type = TaskType.process(typeFile, config, files);
             if (type == null) {
@@ -55,21 +54,20 @@ public class Main {
             }
             taskTypes.add(type);
         }
+        config.verboseMessage("");
         if (taskTypes.size() == 0) {
             config.rageExit(Config.Errors.DETECT_FAILED);
         }
         if (taskTypes.size() == 1) {
             type = taskTypes.get(0);
-            if (!config.isQuietOn()) {
-                System.out.println(Config.DETECTED + type.getName());
-            }
+            config.regularMessage(Config.DETECTED + type.getName());
             return;
         }
         Collections.sort(taskTypes);
         Collections.reverse(taskTypes);
         if (config.isAutoOn()) {
             type = taskTypes.get(0);
-            System.out.println(taskTypes.size() + Config.ASSUMING + type.getName());
+            config.regularMessage(taskTypes.size() + Config.ASSUMING + type.getName());
             return;
         }
         type = choice(taskTypes);
@@ -83,18 +81,18 @@ public class Main {
      * Generates file list to parse.
      * @return list of File objects
      */
-    private List<File> getFileList() {
-        File taskDir = new File(config.getTaskDir());
-        List<File> files = new ArrayList<File>(FileUtils.listFiles(taskDir, null, true));
-        if (File.separator.equals(Config.SL)) {
-            return files;
+    private String[][] getFileList() {
+        String taskDir = config.getTaskDir();
+        String[] tasks = config.getTasks();
+        String[][] result = new String[tasks.length][];
+        for (int task = 0; task < result.length; task++) {
+            List<File> files = new ArrayList<File>(FileUtils.listFiles(new File(taskDir + tasks[task]), null, true));
+            result[task] = new String[files.size()];
+            for (int i = 0; i < result[task].length; i++) {
+                result[task][i] = Config.normalizePath( files.get(i).toString() );
+            }
         }
-        for (ListIterator<File> current = files.listIterator(); current.hasNext();) {
-            File file = current.next();
-            String newName = file.toString().replaceAll(File.separator, Config.SL);
-            current.set(new File(newName));
-        }
-        return files;
+        return result;
     }
 
     /**
@@ -104,7 +102,7 @@ public class Main {
      * @return selected item if any
      */
     private <T> T choice(List<T> items) {
-        System.err.flush();
+        System.out.flush();
         System.out.flush();
         System.out.println("More than one type was detected. Asking for input.");
         Scanner in = new Scanner(System.in);
@@ -127,15 +125,17 @@ public class Main {
                 config.rageExit("Can't read from input!");
             }
             if (num == 0) {
+                in.close();
                 return null;
             }
             try {
-                return items.get(num-1);
+                T result = items.get(num - 1);
+                in.close();
+                return result;
             } catch (IndexOutOfBoundsException e) {
                 System.out.println("Incorrect choice!");
                 continue;
             }
-
         }
     }
 
@@ -153,9 +153,7 @@ public class Main {
             } else {
                 Files.copy(oldPath, newPath);
             }
-            if (config.isVerboseOn()) {
-                System.out.println("\"" + oldName + "\" " + config.getArrow() + " \"" + newName + "\"");
-            }
+            config.verboseMessage("\"" + oldName + "\" " + config.getArrow() + " \"" + newName + "\"");
         } catch (IOException e) {
             config.rageExit("Failed to copy/move files");
         }
@@ -164,16 +162,10 @@ public class Main {
     /**
      * Recursively remove empty directories.
      * @param currentDir    directory to remove
-     * @return true if directory was removed, false otherwise.
      */
     private void clean(final String currentDir) {
         File file = new File(currentDir);
-        String[] directories = file.list(new FilenameFilter() {
-            @Override
-            public boolean accept(File dir, String name) {
-                return new File(dir, name).isDirectory();
-            }
-        });
+        String[] directories = Config.getSubDirs(file);
         if (directories != null) {
             for (String dir : directories) {
                 clean(currentDir + '/' + dir);
@@ -181,14 +173,12 @@ public class Main {
         }
         try {
             if (Files.deleteIfExists(file.toPath())) {
-                if (config.isVerboseOn()) {
-                    System.out.println("Removed empty directory: \"" + file + "\".");
-                }
+                config.verboseMessage("Removed empty directory: \"" + file + "\".");
             }
         } catch (DirectoryNotEmptyException e) {
             // skipping
         } catch (IOException e) {
-            System.err.println("Couldn't remove directory: \"" + file + "\".");
+            config.regularMessage("Couldn't remove directory: \"" + file + "\".");
         }
     }
 
@@ -196,25 +186,35 @@ public class Main {
      * Does moving/copying and calculates marks.
      * @return marks list
      */
-    private String[] doFiles() {
+    private String[][] doFiles() {
         final String taskDir = config.getTaskDir();
         final String workDir = config.getWorkDir();
-        FilePattern.FileProcessed[]
-                infiles = type.getInfiles(),
-                outfiles = type.getOutfiles();
-        String[] marks = new String[infiles.length];
-        for (int i = 0; i < infiles.length; i++) {
-            doFile(taskDir, infiles[i].path, workDir,(i+1) + ".in");
-            if (!config.checkInfilesOnly()) {
-                doFile(taskDir, outfiles[i].path, workDir, (i+1) + ".out");
+        final String[] tasks = config.getTasks();
+        FilePattern.FileProcessed[][]
+                inFiles = type.getInFiles(),
+                outFiles = type.getOutFiles();
+        String[][] marks = new String[inFiles.length][];
+        for (int task = 0; task < tasks.length; task++) {
+            marks[task] = new String[inFiles[task].length];
+            final String dir = workDir + tasks[task];
+            if (!Files.exists(Paths.get(dir))) {
+                new File(dir).mkdirs();
+                config.verboseMessage("Creating task directory \"" + dir + "\".");
             }
-            marks[i] = "-1";
-            if (i > 0 && infiles[i].groupNumber != infiles[i-1].groupNumber) {
-                marks[i-1] = "1";
+            for (int i = 0; i < inFiles[task].length; i++) {
+                doFile(taskDir + tasks[task], inFiles[task][i].path, dir, (i+1) + ".in");
+                if (!config.checkInfilesOnly()) {
+                    doFile(taskDir + tasks[task], outFiles[task][i].path, dir, (i+1) + ".out");
+                }
+                marks[task][i] = "-1";
+                if (i > 0 && inFiles[task][i].groupNumber != inFiles[task][i-1].groupNumber) {
+                    marks[task][i-1] = "1";
+                }
             }
+            marks[task][marks[task].length-1] = "1";
         }
-        marks[marks.length-1] = "1";
         if (config.isCleanOn()) {
+            config.verboseMessage("");
             clean(config.getTaskDir());
         }
         return marks;
@@ -224,19 +224,29 @@ public class Main {
      * Processing files and printing out results.
      */
     private void pout() {
-        String[] marks = doFiles();
-        if (config.isVerboseOn()) {
-            System.out.print("Writing to \"" + config.getOutFile() + "\"...");
+        config.verboseMessage("");
+        final String[][] marks = doFiles();
+        config.verboseMessage("");
+        final String[] tasks = config.getTasks();
+        final String workDir = config.getWorkDir();
+        final String outFile = config.getOutFile();
+        boolean failed = false;
+        for (int task = 0; task < marks.length; task++) {
+            final Path taskOutFile = Paths.get(workDir + tasks[task] + outFile);
+            config.verboseMessage("Writing to \"" + taskOutFile + "\"...");
+            try {
+                Files.write(taskOutFile, Arrays.asList(marks[task]), Charset.defaultCharset());
+            } catch (IOException e) {
+                config.verboseMessage(" can't write to OutFile!");
+                failed = true;
+                continue;
+            }
+            config.verboseMessage(" done.");
         }
-        try {
-            Files.write(Paths.get(config.getWorkDir() + config.getOutFile()),
-                    Arrays.asList(marks), Charset.defaultCharset());
-        } catch (IOException e) {
-            config.rageExit("Can't write to OutFile!");
+        if (failed) {
+            config.rageExit("Couldn't write to some OutFiles!");
         }
-        if (config.isVerboseOn()) {
-            System.out.println(" done.");
-        }
+        config.regularMessage("Conversion finished successfully.");
     }
 
     /**

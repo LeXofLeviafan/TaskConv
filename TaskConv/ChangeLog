@@ -1,3 +1,10 @@
+2013/08/27 v1.2.1	- Fixed Windows separator parse exception bug.
+			- Fixed confusing messaging behaviour.
+			- Replaced --clean with --keep, making cleaning the
+			default choice; using --keep without --move doesn't
+			result in an error.
+			- Added option --level to allow procesing multiple tasks
+			of the same type at a time.
 2013/08/25 v1.2 	- Rewritten code completely in Java.
 			- Fixed detection, fixed faildetect bug.
 			- Changed default value of --outfile option.

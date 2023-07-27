@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 /**
  * File pattern for task types.
  * @author Alexey Gulenko
- * @version 1.2
+ * @version 1.2.1
  */
 public class FilePattern {
 
@@ -66,7 +66,7 @@ public class FilePattern {
     public static FilePattern process(final String pattern, final Config config) {
         String[] patternData = makeRegexPattern(pattern, config);
         if (patternData == null) {
-            System.err.println("Pattern is incorrect: \"" + pattern + "\".");
+            config.regularMessage("Pattern is incorrect: \"" + pattern + "\".");
             return null;
         }
         return new FilePattern(pattern, patternData);
@@ -99,7 +99,7 @@ public class FilePattern {
 
     /**
      * Split string into token, group and leftover part.
-     * @param s         string tokenized
+     * @param s         string being split
      * @param config    configuration
      * @return {token, group, groupName, leftover}
      */
@@ -139,7 +139,7 @@ public class FilePattern {
      * @param config           configuration
      * @return group regexp
      */
-    public static String calcGroup(final String groupName, final boolean groupRequired, final Config config) {
+    private static String calcGroup(final String groupName, final boolean groupRequired, final Config config) {
         String group = "";
         Elements element = null;
         for (Elements item : Elements.values()) {
@@ -207,6 +207,11 @@ public class FilePattern {
             taskName = theTaskName;
             groupNumber = theGroupNumber;
             testNumber = theTestNumber;
+        }
+
+        @Override
+        public String toString() {
+            return path;
         }
 
         @Override

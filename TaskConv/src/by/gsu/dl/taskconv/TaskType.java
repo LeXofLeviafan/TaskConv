@@ -10,13 +10,17 @@ import java.util.*;
 /**
  * Task type data.
  * @author Alexey Gulenko
- * @version 1.2
+ * @version 1.2.1
  */
 public class TaskType implements Comparable<TaskType> {
 
     @Override
     public int compareTo(TaskType o) {
-        return new Integer(infiles.length).compareTo(o.infiles.length);
+        int result = filesNum.compareTo(o.filesNum);
+        for (int i = 0; i < inFiles.length && result == 0; i++) {
+            result = new Integer(inFiles[i].length).compareTo(o.inFiles[i].length);
+        }
+        return result;
     }
 
     /** Type configuration file lines info. */
@@ -38,14 +42,16 @@ public class TaskType implements Comparable<TaskType> {
     private FilePattern infilePattern;
     /** Pattern for output files. */
     private FilePattern outfilePattern;
-    /** Detected input files. */
-    private FilePattern.FileProcessed[] infiles;
-    /** Getter method for {@link #infiles} */
-    public FilePattern.FileProcessed[] getInfiles() { return infiles; }
-    /** Detected output files. */
-    private FilePattern.FileProcessed[] outfiles;
-    /** Getter method for {@link #outfiles} */
-    public FilePattern.FileProcessed[] getOutfiles() { return outfiles; }
+    /** Detected input files, per task. */
+    private FilePattern.FileProcessed[][] inFiles;
+    /** Getter method for {@link #inFiles} */
+    public FilePattern.FileProcessed[][] getInFiles() { return inFiles; }
+    /** Detected output files, per task. */
+    private FilePattern.FileProcessed[][] outFiles;
+    /** Getter method for {@link #outFiles} */
+    public FilePattern.FileProcessed[][] getOutFiles() { return outFiles; }
+    /** Total number of detected files. */
+    private Integer filesNum;
 
     /**
      * Private constructor.
@@ -62,18 +68,16 @@ public class TaskType implements Comparable<TaskType> {
      * @param files     set of files to match
      * @return TaskType instance for given type, if it's valid
      */
-    public static TaskType process(final File path, final Config config, final Collection<File> files) {
+    public static TaskType process(final File path, final Config config, final String[][] files) {
         TaskType type = new TaskType(path.getName());
-        if (config.isVerboseOn()) {
-            System.out.println("Checking task type \"" + type.name + "\"...");
-        }
+        config.verboseMessage("Checking task type \"" + type.name + "\"...");
         try {
             List<String> lines = Files.readAllLines(path.toPath(), Charset.defaultCharset());
             //System.out.println(lines);
             type.infilePattern = FilePattern.process(lines.get(TypeLines.INPUT_FILES.number()), config);
             type.outfilePattern = FilePattern.process(lines.get(TypeLines.OUTPUT_FILES.number()), config);
             if (type.infilePattern == null || type.outfilePattern == null) {
-                System.err.println("Incorrect task type: \"" + type.name + "\".");
+                System.out.println("Incorrect task type: \"" + type.name + "\".");
                 return null;
             }
         } catch (IOException e) {
@@ -81,14 +85,13 @@ public class TaskType implements Comparable<TaskType> {
             return null;
         }
         if (!type.calcInOutFiles(config, files)) {
+            config.verboseMessage("Failed to gather files.");
             return null;
         }
         if (!type.checkInOutFiles(config)) {
             return null;
         }
-        if (config.isVerboseOn()) {
-            System.out.println("Task type \"" + type.name + "\": passed.");
-        }
+        config.verboseMessage("Task type \"" + type.name + "\": passed.");
         return type;
     }
 
@@ -98,41 +101,49 @@ public class TaskType implements Comparable<TaskType> {
      * @param files     set of files to match
      * @return true if found matching files, false otherwise
      */
-    private boolean calcInOutFiles(final Config config, final Collection<File> files) {
-        List<FilePattern.FileProcessed>
-                ins = new ArrayList<FilePattern.FileProcessed>(),
-                outs = new ArrayList<FilePattern.FileProcessed>();
+    private boolean calcInOutFiles(final Config config, final String[][] files) {
+        List<FilePattern.FileProcessed[]>
+                ins = new ArrayList<FilePattern.FileProcessed[]>(),
+                outs = new ArrayList<FilePattern.FileProcessed[]>();
         int prefix = config.getTaskDir().length();
-        for (File file : files) {
-            String path = file.toString().substring(prefix);
-            FilePattern.FileProcessed in = infilePattern.match(path);
-            FilePattern.FileProcessed out = null;
-            if (!config.checkInfilesOnly()) {
-                out = outfilePattern.match(path);
-            }
-            if (in != null && out != null) {
-                if (config.isVerboseOn()) {
-                    System.err.println("File \"" + path + "\" is detected as both input and output file for type \""
-                            + name + "\".");
+        filesNum = 0;
+        for (int task = 0; task < files.length; task++) {
+            List<FilePattern.FileProcessed>
+                    taskIns = new ArrayList<FilePattern.FileProcessed>(),
+                    taskOuts = new ArrayList<FilePattern.FileProcessed>();
+            int taskPrefix = config.getTasks()[task].length();
+            for (String file : files[task]) {
+                String path = file.substring(prefix + taskPrefix);
+                FilePattern.FileProcessed in = infilePattern.match(path);
+                FilePattern.FileProcessed out = null;
+                if (!config.checkInfilesOnly()) {
+                    out = outfilePattern.match(path);
                 }
+                if (in != null && out != null) {
+                    config.verboseMessage("File \"" + path +
+                            "\" is detected as both input and output file for type \"" + name + "\".");
+                    return false;
+                }
+                if (in != null) {
+                    taskIns.add(in);
+                }
+                if (out != null) {
+                    taskOuts.add(out);
+                }
+            }
+            if (taskIns.size() == 0) {
                 return false;
             }
-            if (in != null) {
-                ins.add(in);
+            Collections.sort(taskIns);
+            if (taskOuts.size() > 0) {
+                Collections.sort(taskOuts);
             }
-            if (out != null) {
-                outs.add(out);
-            }
+            ins.add(taskIns.toArray(new FilePattern.FileProcessed[0]));
+            outs.add(taskOuts.toArray(new FilePattern.FileProcessed[0]));
+            filesNum += taskIns.size();
         }
-        if (ins.size() == 0) {
-            return false;
-        }
-        Collections.sort(ins);
-        if (outs.size() > 0) {
-            Collections.sort(outs);
-        }
-        infiles = ins.toArray(new FilePattern.FileProcessed[0]);
-        outfiles = outs.toArray(new FilePattern.FileProcessed[0]);
+        inFiles = ins.toArray(new FilePattern.FileProcessed[0][0]);
+        outFiles = outs.toArray(new FilePattern.FileProcessed[0][0]);
         return true;
     }
 
@@ -143,21 +154,24 @@ public class TaskType implements Comparable<TaskType> {
      */
     private boolean checkFileSet(final Config config) {
         final String workDir = config.getWorkDir();
-        Set<String> allFiles = new HashSet<String>();
-        for (int i = 0; i < infiles.length; i++) {
-            if (!allFiles.add(infiles[i].path.toString())) {
-                return false;
+        final String[] tasks = config.getTasks();
+        for (int task = 0; task < inFiles.length; task++) {
+            Set<String> allFiles = new HashSet<String>();
+            for (int i = 0; i < inFiles[task].length; i++) {
+                if (!allFiles.add(inFiles[task][i].path.toString())) {
+                    return false;
+                }
+                if (Files.exists(Paths.get(workDir + tasks[task] + (i+1) + ".in"))) {
+                    return false;
+                }
             }
-            if (Files.exists(Paths.get(workDir + (i+1) + ".in"))) {
-                return false;
-            }
-        }
-        for (int i = 0; i < outfiles.length; i++) {
-            if (!allFiles.add(outfiles[i].path.toString())) {
-                return false;
-            }
-            if (Files.exists(Paths.get(workDir + (i+1) + ".out"))) {
-                return false;
+            for (int i = 0; i < outFiles[task].length; i++) {
+                if (!allFiles.add(outFiles[task][i].path.toString())) {
+                    return false;
+                }
+                if (Files.exists(Paths.get(workDir + tasks[task] + (i+1) + ".out"))) {
+                    return false;
+                }
             }
         }
         return true;
@@ -170,44 +184,45 @@ public class TaskType implements Comparable<TaskType> {
      */
     private boolean checkInOutFiles(final Config config) {
         if (!checkFileSet(config)) {
+            config.verboseMessage("File set consistency check failed.");
             return false;
         }
-        if (config.checkInfilesOnly()) {
-            String taskName = infiles[0].taskName;
-            for (FilePattern.FileProcessed file : infiles) {
-                if (!taskName.equals(file.taskName)) {
-                    System.err.println("Task names don't match for type \"" + name + "\".");
+        for (int task = 0; task < inFiles.length; task++) {
+            if (config.checkInfilesOnly()) {
+                String taskName = inFiles[task][0].taskName;
+                for (FilePattern.FileProcessed file : inFiles[task]) {
+                    if (!taskName.equals(file.taskName)) {
+                        config.verboseMessage("Task names don't match for type \"" + name + "\".");
+                        return false;
+                    }
+                }
+                continue;
+            }
+            if (inFiles.length != outFiles.length) {
+                config.verboseMessage("Number of input and output files doesn't match for type \"" + name + "\".");
+                return false;
+            }
+            String taskName = inFiles[task][0].taskName;
+            String taskName2 = outFiles[task][0].taskName;
+            if (!taskName.equals("") && !taskName2.equals("")) {
+                if (!taskName.equals(taskName2)) {
+                    config.verboseMessage("Task names don't match for type \"" + name + "\".");
                     return false;
                 }
             }
-            return true;
-        }
-        if (infiles.length != outfiles.length) {
-            if (config.isVerboseOn()) {
-                System.out.println("Number of input and output files doesn't match for type \"" + name + "\".");
-            }
-            return false;
-        }
-        String taskName = infiles[0].taskName;
-        String taskName2 = outfiles[0].taskName;
-        if (!taskName.equals("") && !taskName2.equals("")) {
-            if (!taskName.equals(taskName2)) {
-                System.err.println("Task names don't match for type \"" + name + "\".");
-                return false;
-            }
-        }
-        for (int i = 0; i < infiles.length; i++) {
-            if (!taskName.equals(infiles[i].taskName) || !taskName2.equals(outfiles[i].taskName)) {
-                System.err.println("Task names don't match for type \"" + name + "\".");
-                return false;
-            }
-            if (!infiles[i].groupNumber.equals(outfiles[i].groupNumber)) {
-                System.err.println("Group numbers don't match for type \"" + name + "\".");
-                return false;
-            }
-            if (!infiles[i].testNumber.equals(outfiles[i].testNumber)) {
-                System.err.println("Test numbers don't match for type \"" + name + "\".");
-                return false;
+            for (int i = 0; i < inFiles[task].length; i++) {
+                if (!taskName.equals(inFiles[task][i].taskName) || !taskName2.equals(outFiles[task][i].taskName)) {
+                    config.verboseMessage("Task names don't match for type \"" + name + "\".");
+                    return false;
+                }
+                if (!inFiles[task][i].groupNumber.equals(outFiles[task][i].groupNumber)) {
+                    config.verboseMessage("Group numbers don't match for type \"" + name + "\".");
+                    return false;
+                }
+                if (!inFiles[task][i].testNumber.equals(outFiles[task][i].testNumber)) {
+                    config.verboseMessage("Test numbers don't match for type \"" + name + "\".");
+                    return false;
+                }
             }
         }
         return true;
@@ -215,7 +230,16 @@ public class TaskType implements Comparable<TaskType> {
 
     @Override
     public String toString() {
-        return String.format("(%3d) %s", infiles.length, name);
+        StringBuilder result = new StringBuilder(String.format("(%03d) ", filesNum));
+        if (inFiles.length > 1) {
+            result.append(String.format("{%02d", inFiles[0].length));
+            for (int i = 1; i < inFiles.length; i++) {
+                result.append(String.format(", %02d", inFiles[i].length));
+            }
+            result.append("} ");
+        }
+        result.append(name);
+        return result.toString();
     }
 
     /** Getter method for {@link #name} */

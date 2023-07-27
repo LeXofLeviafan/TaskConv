@@ -6,20 +6,19 @@ import org.apache.commons.io.filefilter.WildcardFileFilter;
 
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FilenameFilter;
 import java.io.IOException;
 import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 import java.util.regex.Pattern;
 
 /**
  * Configuration data.
  * @author Alexey Gulenko
- * @version 1.2
+ * @version 1.2.1
  */
 public class Config {
 
@@ -34,11 +33,11 @@ public class Config {
 
     /** RageExit lines. */
     public enum Errors {
-        TOO_MANY("You cannot specify an option twice!"),
+        TOO_MANY("You cannot specify a path option twice!"),
         NO_DIR("No taskDir specified!"),
+        NO_TASKS("No subdirectories found at specified level!"),
         BAD_DIR("No such directory exists!"),
         BAD_TYPE("Task type not recognized!"),
-        CANT_CLEAN("Option -c can only be used together with -m!"),
         OUT_FILE_EXISTS("I refuse to rewrite existing outFile!"),
         WORKDIR_FILE_EXISTS("I refuse to replace existing file with a directory!"),
         DETECT_FAILED("Failed to detect task type!");
@@ -73,7 +72,7 @@ public class Config {
     /** Letters (${SL}). */
     public static final String LETTERS = "a-z";
     /** Directory separator. */
-    public static final String SL = "/";
+    private static final String SL = "/";
 
     /** Default CFG contents. */
     private static final String[] DEFAULT_CFG = {LETTERS};
@@ -81,7 +80,7 @@ public class Config {
     /** Chars(${taskName}). */
     private final String abc;
     /** Getter method for {@link #abc} */
-    public String getAbc() { return abc; }
+    private String getAbc() { return abc; }
     /** -v: arrow for moving/copying files. */
     private String arrow = COPY_ARROW;
     /** Getter method for {@link #arrow} */
@@ -101,6 +100,12 @@ public class Config {
     private String taskDir = null;
     /** Getter method for {@link #taskDir} */
     public String getTaskDir() { return taskDir; }
+    /** Task subdirectories depth. */
+    private int taskDepth = 0;
+    /** Task list. */
+    private String[] tasks = null;
+    /** Getter method for {@link #tasks} */
+    public String[] getTasks() { return tasks; }
     /** Output directory name. */
     private String workDir = null;
     /** Getter method for {@link #workDir} */
@@ -115,17 +120,12 @@ public class Config {
     public enum Verbosity{ QUIET, NORMAL, VERBOSE; }
     /** Console output verbosity. */
     private Verbosity verbosity = Verbosity.NORMAL;
-    /** Checks if verbosity is set to quiet. */
-    public boolean isQuietOn() { return verbosity.equals(Verbosity.QUIET); }
-    /** Checks if verbosity is set to verbose. */
-    public boolean isVerboseOn() { return verbosity.equals(Verbosity.VERBOSE); }
-
     /** Move instead of copying. */
     private boolean move = false;
     /** Getter method for {@link #move} */
     public boolean isMoveOn() { return move; }
     /** Clean after moving. */
-    private boolean clean = false;
+    private boolean clean = true;
     /** Getter method for {@link #clean} */
     public boolean isCleanOn() { return clean; }
 
@@ -138,7 +138,7 @@ public class Config {
      * Processes basic config file.
      * @return list of config file lines
      */
-    private static List<String> getCfg() {
+    private List<String> getCfg() {
         try {
             List <String> lines = Files.readAllLines(Paths.get(CFG), Charset.defaultCharset());
             if (lines.isEmpty()) {
@@ -151,7 +151,7 @@ public class Config {
             }
             return lines;
         } catch (IOException e) {
-            System.err.println("File \"" + CFG + "\" not found!");
+            verboseMessage("File \"" + CFG + "\" not found, falling back to defaults.");
             return Arrays.asList(DEFAULT_CFG);
         }
     }
@@ -161,9 +161,9 @@ public class Config {
      * @param args    application argument list
      */
     public Config(final String[] args) {
+        processArgs(args);
         List<String> cfg = getCfg();
         abc = '[' + cfg.get(CfgLines.ABC.number()) + ']';
-        processArgs(args);
         prepareVals();
     }
 
@@ -181,7 +181,7 @@ public class Config {
             if (values == null) {
                 setBoolean(option);
             } else if (values.length == 1) {
-                setString(option, values[0]);
+                setString(option, normalizePath(values[0]));
             } else {
                 rageExit(Errors.TOO_MANY+" { --" + option + "=\"" + values[1] + "\" }");
             }
@@ -189,7 +189,7 @@ public class Config {
         String[] values = arguments.getArgs();
         if (values != null) {
             for (String value : values) {
-                setTaskOrWorkDir(value);
+                setTaskOrWorkDir(normalizePath(value));
             }
         }
     }
@@ -200,16 +200,20 @@ public class Config {
     private void prepareVals() {
         // taskDir
         if (taskDir == null || "".equals(taskDir)) {
-            rageExit(Errors.NO_DIR);
+            rageExit(Errors.NO_DIR, true);
         }
         if (!Files.isDirectory(Paths.get(taskDir))) {
-            rageExit(Errors.BAD_DIR);
+            rageExit(Errors.BAD_DIR, true);
         }
         if (!taskDir.endsWith(SL)) {
             taskDir += SL;
         }
-        if (!isQuietOn()) {
-            System.out.println("Processing directory \"" + taskDir + "\".");
+        regularMessage("Processing directory \"" + taskDir + "\".");
+
+        // tasks
+        tasks = generateDirs(taskDir, "", taskDepth).toArray(new String[0]);
+        if (tasks.length == 0) {
+            rageExit(Errors.NO_TASKS);
         }
 
         // outFile
@@ -240,18 +244,15 @@ public class Config {
         if (Files.exists(dir) && !Files.isDirectory(dir)) {
             rageExit(Errors.WORKDIR_FILE_EXISTS);
         }
-        if (!Files.exists(dir)) {
-            new File(workDir).mkdirs();
-            if (isVerboseOn()) {
-                System.out.println("Creating work directory \"" + workDir + "\"");
-            }
-        }
 
         // Move, Clean
         if (move) {
             arrow = MOVE_ARROW;
-        } else if (clean) {
-            rageExit(Errors.CANT_CLEAN);
+        } else {
+            if (!clean) {
+                regularMessage("--move never used, ignoring --keep.");
+            }
+            clean = false;
         }
 
     }
@@ -272,8 +273,8 @@ public class Config {
             case MOVE:
                 move = true;
                 break;
-            case CLEAN:
-                clean = true;
+            case KEEP:
+                clean = false;
                 break;
             case INFILES_ONLY:
                 infilesOnly = true;
@@ -297,6 +298,16 @@ public class Config {
             case DIRECTORY:
                 setTaskDir(value);
                 break;
+            case LEVEL:
+                try {
+                    taskDepth = Integer.parseInt(value);
+                } catch (NumberFormatException e) {
+                    rageExit("Level must be a number!");
+                }
+                if (taskDepth < 0) {
+                    rageExit("Level must be a non-negative number!");
+                }
+                break;
             case TASK_NAME:
                 setTaskName(value);
                 break;
@@ -312,8 +323,26 @@ public class Config {
     private void setVerbosity(final Arguments option) {
         if (option.equals(Arguments.QUIET)) {
             verbosity = Verbosity.QUIET;
+            auto = true;
         } else {
             verbosity = Verbosity.VERBOSE;
+        }
+    }
+
+    /**
+     * Prints out message if verbosity isn't set to quiet.
+     * @param message    message to print
+     */
+    public void regularMessage(final String message) {
+        if (!verbosity.equals(Verbosity.QUIET)) {
+            System.out.println(message);
+        }
+    }
+
+    /** Checks if verbosity is set to verbose. */
+    public void verboseMessage(final String message) {
+        if (verbosity.equals(Verbosity.VERBOSE)) {
+            System.out.println(message);
         }
     }
 
@@ -324,6 +353,18 @@ public class Config {
     public File[] getTaskTypes() {
         FileFilter filter = new WildcardFileFilter(taskType, IOCase.INSENSITIVE);
         return new File(DATA_DIR).listFiles(filter);
+    }
+
+    /**
+     * Replacess all occurrences of {@link File#separator} with {@link #SL}.
+     * @param path    path to be normalized
+     * @return normalized path
+     */
+    public static String normalizePath(final String path) {
+        if (!SL.equals(File.separator)) {
+            return path.replaceAll(Pattern.quote(File.separator), SL);
+        }
+        return path;
     }
 
     /**
@@ -350,7 +391,43 @@ public class Config {
             workDir = value;
             return;
         }
-        rageExit(Errors.TOO_MANY+" { --" + Arguments.DIRECTORY + "=\"" + value + "\" }");
+        rageExit(Errors.TOO_MANY+" { \"" + value + "\" }");
+    }
+
+    /**
+     * Generates list of subdirectories on the given level.
+     * @param root      root directory to search in
+     * @param parent    current subdirectory
+     * @param depth     current level
+     * @return list of subdirectories
+     */
+    private List<String> generateDirs(final String root, final String parent, final int depth) {
+        final List<String> result = new ArrayList<String>();
+        if (depth == 0) {
+            result.add(parent);
+            return result;
+        }
+        final String[] dirs = getSubDirs(new File(root + parent));
+        for (String dir : dirs) {
+            for (String subdir : generateDirs(root, parent + dir + SL, depth-1)) {
+                result.add(subdir);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Generates list of subdirectories for the given one.
+     * @param parent    directory to scan
+     * @return array of directory names
+     */
+    public static String[] getSubDirs(final File parent) {
+        return parent.list(new FilenameFilter() {
+            @Override
+            public boolean accept(File dir, String name) {
+                return new File(dir, name).isDirectory();
+            }
+        });
     }
 
     /**
@@ -366,12 +443,26 @@ public class Config {
      * @param error Error message.
      */
     public void rageExit(final String error) {
-        if (!isQuietOn()) {
-            System.err.println(error);
+        regularMessage(error);
+        System.exit(1);
+    }
+    /**
+     * Stops execution with an error message.
+     * @param error    error message
+     * @param usage    true if usage info needed
+     */
+    private void rageExit(final Errors error, boolean usage) {
+        regularMessage(error+"");
+        if (usage && !verbosity.equals(Verbosity.QUIET)) {
+            Arguments.printUsage();
         }
         System.exit(1);
     }
+    /**
+     * Stops execution with an error message.
+     * @param error    error message
+     */
     public void rageExit(final Errors error) {
-        rageExit(error+"");
+        rageExit(error, false);
     }
 }

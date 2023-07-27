@@ -1,23 +1,25 @@
 TaskConvertor converts tasks with group tests from known formats in DL test format.
-Version 1.2
+Version 1.2.1
 
 
 usage: TaskConv {-h|[-d] <path>} [[-w] <path>] [options]
  -a,--auto                decide on task type automatically if result is
                           ambiguous
- -c,--clean               when used with move, remove empty directories
-                          recursively from task directory after processing
-                          files
  -d,--directory <path>    task directory (required)
  -h,--help                print this message
- -i,--infiles-only        allow for zero output files
+ -i,--infiles-only        process input files only (for tasks without
+                          output files)
+ -k,--keep                when used with --move, don't remove empty
+                          directories recursively from task directory
+                          after processing files
+ -l,--level <int>         depth level (default is 0)
  -m,--move                move files instead of copying
- -n,--name <taskname>     task name (used for sake of convenience)
+ -n,--name <taskname>     task name (predefined instead of detecting)
  -o,--output <filename>   output filename (result); default is "marks.txt"
- -q,--quiet               suppress messages
+ -q,--quiet               suppress all messages
  -t,--type <prefix>       required prefix of the task type (IOI, CEOI etc)
  -v,--verbose             verbose output
- -w,--workdir <path>      output directory
+ -w,--workdir <path>      output directory (default is task directory)
 
 
 Options with arguments can be written in following ways:
@@ -36,6 +38,13 @@ by following rules:
  - if task directory (-d) wasn't set, argument is considered to describe it
  - otherwise, if output directory (-w) wasn't set, argument is considered to describe it
  - otherwise the argument is illegal and the program will refuse to work
+
+Depth level is number of levels program needs to descend from TaskDir to get to the tasks; that is,
+ALL subdirectories on that level are considered tasks of the SAME TYPE. If ANY of them fails
+type detection, it fails for the whole group.
+Usage example:
+	tasks are placed like  'Baltica2011/Day 1/task1'
+	program is called like 'TaskConv Baltica2011 -l2'
 
 
 Files contained in "DB/" directory are known types. Feel free to add your own (make sure to do it

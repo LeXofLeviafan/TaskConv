@@ -2,36 +2,48 @@ package by.gsu.dl.taskconv;
 
 import org.apache.commons.cli.*;
 
-import java.util.Arrays;
-
 /**
  * Commandline options.
  * @author Alexey Gulenko
- * @version 1.2
+ * @version 1.2.1
  */
 public enum Arguments {
     AUTO('a', "auto", null, "decide on task type automatically if result is ambiguous"),
     HELP('h', "help", null, "print this message"),
-    QUIET('q', "quiet", null, "suppress messages"),
+    QUIET('q', "quiet", null, "suppress all messages (also applies --auto)"),
     VERBOSE('v', "verbose", null, "verbose output"),
     MOVE('m', "move", null, "move files instead of copying"),
-    CLEAN('c', "clean", null, "when used with move, remove empty "
+    KEEP('k', "keep", null, "when used with --move, don't remove empty "
             + "directories recursively from task directory after processing files"),
-    INFILES_ONLY('i', "infiles-only", null, "allow for zero output files"),
+    INFILES_ONLY('i', "infiles-only", null, "process input files only (for tasks without output files)"),
     TASK_TYPE('t', "type", "prefix", "required prefix of the task type (IOI, CEOI etc)"),
     OUTPUT_FILE('o', "output", "filename", "output filename (result); default is \"marks.txt\""),
     DIRECTORY('d', "directory", "path", "task directory (required)"),
-    WORK_DIR('w', "workdir", "path", "output directory"),
-    TASK_NAME('n', "name", "taskname", "task name (used for sake of convenience)");
+    LEVEL('l', "level", "int", "depth level (default is 0)"),
+    WORK_DIR('w', "workdir", "path", "output directory (default is task directory)"),
+    TASK_NAME('n', "name", " taskname", "task name (predefined instead of detecting)");
 
     /** Short option. */
     private final char shortName;
+    /** Getter method for {@link #shortName}. */
+    public char toChar() { return shortName; }
+
     /** Long option. */
     private final String longName;
+    @Override
+    public String toString() { return longName; }
+
     /** Argument name, if any. */
     private final String argument;
+    /** Getter method for {@link #argument}. */
+    public String getArgument() { return argument; }
+    /** Checks if {@link #argument} is not null. */
+    public boolean hasArgument() { return (argument != null); }
+
     /** User-friendly description. */
     private final String description;
+    /** Getter method for {@link #description} */
+    public String getDescription() { return description; }
 
     /** Basic constructor. */
     private Arguments(final char theShortName, final String theLongName, final String theArgument,
@@ -40,31 +52,6 @@ public enum Arguments {
         longName = theLongName;
         argument = theArgument;
         description = theDescription;
-    }
-
-    @Override
-    public String toString() {
-        return longName;
-    }
-
-    /** Getter method for {@link #shortName}. */
-    public char toChar() {
-        return shortName;
-    }
-
-    /** Getter method for {@link #argument}. */
-    public String getArgument() {
-        return argument;
-    }
-
-    /** Checks if {@link #argument} is not null. */
-    public boolean hasArgument() {
-        return (argument != null);
-    }
-
-    /** Getter method for {@link #description} */
-    public String getDescription() {
-        return description;
     }
 
     /**
@@ -107,7 +94,7 @@ public enum Arguments {
                 printUsage();
             }
         } catch (ParseException e) {
-            System.err.println(e.getLocalizedMessage());
+            System.out.println(e.getLocalizedMessage());
             printUsage();
         }
         return result;
