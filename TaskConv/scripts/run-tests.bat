@@ -1,4 +1,4 @@
-@call init
+@call init_nocompile
 pytest
 call deactivate
 call :clean %*

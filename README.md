@@ -1,7 +1,7 @@
 # TaskConv
 DL tool for converting programming task types into DL format
 
-(This is the Python reimplementation.)
+(This is the Python reimplementation, modified for offline installation on Windows XP.)
 
 [![Unit tests](https://github.com/LeXofLeviafan/TaskConv/actions/workflows/test.yml/badge.svg)](https://github.com/LeXofLeviafan/TaskConv/actions/workflows/test.yml)
 

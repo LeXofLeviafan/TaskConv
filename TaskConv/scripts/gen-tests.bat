@@ -1,4 +1,4 @@
-@call init
+@call init_nocompile
 python TaskConv_test.py
 call deactivate
 call :clean %*
