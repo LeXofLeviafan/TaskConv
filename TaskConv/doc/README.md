@@ -1,7 +1,7 @@
 # TaskConv
 
 Utility tool for converting group tests to DL format.
-Version 2.0
+Version 2.0.1
 
 ## Usage
 
@@ -67,7 +67,8 @@ fields:
  * `regex` (*required*): regular expression pattern that describes the token (note that if the `key`
    matches a CLI argument name, it can be used to override the pattern with a literal string)
  * `value`: defines how the value is parsed (it's a string by default); the following values are
-   currently recognized: `int`, `letternum` (a "letters-only" number, counted starting from `1`)
+   currently recognized: `int`, `letternum` (a "letters-only" number, counted starting from `1`),
+   `zero` (a fixed value `0`)
  * `fixed` (boolean, defaults to `no`) matches are required to be consistent between all files in
    the task (this may lead to detection failures – you can use `-t`/`-n` to deal with those)
 
@@ -81,6 +82,9 @@ and a list of items:
 
 A pattern is a string containing file path with tokens injected by name, as either required
 (`${Token}`) or optional (`$[Token]`) match; i.e. `tests/${S}$[SL].in`.
+
+Additionally, there's a special token `$|` which separates alternative patterns (like `|` in regex).
+Note that it separates _entire_ patterns, which are tested in order until a match is found.
 
 The (optional) test definitions are run agains the configuration loaded from the config file,
 and the code is expected to detect the task type unambiguously and produce a specified number of
