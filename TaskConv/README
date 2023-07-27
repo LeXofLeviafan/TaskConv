@@ -4,7 +4,7 @@ TaskConvertor converts tasks with group tests from known formats in DL test form
 USAGE:
 taskconv -h|--help
 taskconv [-v|--verbose] [-m|--move] [-t TaskType|--type=TaskType] [-o OutFile|-output=OutFile]
-         [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir
+         [-i|--infilesonly] [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir
 
 Options with arguments can be written in following ways:
  -d TaskDir

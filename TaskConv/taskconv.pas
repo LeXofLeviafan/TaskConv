@@ -10,15 +10,16 @@ Uses
 
 CONST
   // help (-h)
-  HelpLines = 12;
+  HelpLines = 13;
   Help          : Array [1..HelpLines] Of AnsiString = (
     'USAGE:',
     '   taskconv -h|--help',
     '   taskconv [-v|--verbose] [-q|--quiet] [-m|--move] [-t TaskType|--type=TaskType] [-o OutFile|-output=OutFile]',
-    '            [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir',
+    '            [-i|--infilesonly] [-n TaskName|--name=TaskName] -d TaskDir|--directory=TaskDir|TaskDir',
     ' --help shows this help',
     ' --verbose sets verbose mode, --quiet sets quiet mode',
     ' --move sets move mode (instead of copying)',
+    ' --infilesonly sets infiles-only mode (for tasks without outfiles)',
     ' all other options are used to set values:',
     'TaskType should refer to a known type of task',
     'OutFile should be a valid filename',
@@ -45,7 +46,7 @@ CONST
 
 CONST
   // possible options
-  OptionNumber = 9;
+  OptionNumber = 10;
   Options       : Array [1..OptionNumber] Of TOption = (
    // help
     (Name       : 'help';
@@ -67,6 +68,11 @@ CONST
      Has_Arg    : No_Argument;
      Flag       : NIL;
      Value      : 'm'),
+   // allow for zero output files
+    (Name       : 'infilesonly';
+     Has_Arg    : No_Argument;
+     Flag       : NIL;
+     Value      : 'i'),
    // Task type (IOI, CEOI etc)
     (Name       : 'type';
      Has_Arg    : Required_Argument;
@@ -143,6 +149,7 @@ VAR
   Verbose       : Boolean = False;
   Quiet         : Boolean = False;
   Move          : Boolean = False;
+  InFilesOnly   : Boolean = False;
 
   // error exit
   Procedure RageExit(S  : AnsiString);
@@ -229,6 +236,7 @@ VAR
             Quiet:=False;
           End;
           'm'     : Move:=True;
+          'i'     : InFilesOnly:=True;
         End;
       Until (Opt = EndOfOptions);
     End;
@@ -334,7 +342,8 @@ VAR
     // checking type for existance of files
     Procedure TryType(Name  : TFilename);
     Var
-      InCount, OutCount  : Word;
+      InCount, OutCount,
+      OutRequired        : Word;
       InPat, OutPat      : TFilePattern;
 
       // counting files matching search pattern
@@ -402,11 +411,14 @@ VAR
       If (InCount = 0)
         Then Exit;
       OutCount:=CountPat(OutPat);
-      If (OutCount <> InCount) Then Begin
-        // number of infiles and outfiles has not matched
+      OutRequired:=InCount;
+      If (InFilesOnly)
+        Then OutRequired:=0;
+      If (OutCount <> OutRequired) Then Begin
+        // number of outfiles has not matched required number
         If (Verbose)
           Then WriteLn('For task type '+Copy(Name, Length(DataDir)+1, Length(Name))+', detected ',
-                        InCount, ' input files and ', OutCount, ' output files; skipping!');
+                        InCount, ' input files and ', OutCount, ' output files (', OutRequired, ' expected); skipping!');
         Exit;
       End;
 
@@ -427,7 +439,8 @@ VAR
     Var
       InFiles, OutFiles  : Array Of TTestFile;  // infiles/outfiles data
       InPat, OutPat      : TFilePattern;        // patterns for infiles/outfiles
-      InCount, OutCount  : Word;                // number of validated infiles/outfiles
+      InCount, OutCount,                        // number of validated infiles/outfiles
+      OutRequired        : Word;                // required number of outfiles
 
       // generate infile/outfile list
       Procedure ListFiles(Pattern  : TFilePattern;  Var Files  : Array Of TTestFile);
@@ -550,6 +563,10 @@ VAR
               Z1:=AnsiLowerCase( Copy(S1, 1, Pos(Sl, S1)-1) );
               Delete(S1, 1, Pos(Sl, S1));
               While (Length(Z) > 0) And (Valid) Do Begin
+                If (Length(Z1) = 0) Then Begin
+                  Valid:=False;
+                  Break;
+                End;
                 // removing regular characters
                 If (Z = Z1)
                   Then Break;
@@ -735,6 +752,8 @@ VAR
                 Then WriteLn('"'+Name+'" '+Arr+' "'+NewName+'"');
           End;
         End;
+        If (InFilesOnly)
+          Then Exit;
         // doing outfiles
         For i:=0 To High(InFiles) Do Begin
           With (OutFiles[i]) Do Begin
@@ -774,12 +793,17 @@ VAR
         ListFiles(OutPat, OutFiles);
 
         // calculating test numbers
-        InCount:=CalcTests(InFiles);
         OutCount:=CalcTests(OutFiles);
-        If (InCount <> OutCount) Then Begin
-          // numbers of infiles and outfiles don''t match
+        InCount:=CalcTests(InFiles);
+        OutRequired:=InCount;
+        If (InFilesOnly)
+          Then OutRequired:=0;
+        If (OutCount <> OutRequired) Then Begin
+          // number outfiles doesn''t match required number
           If (Verbose)
             Then WriteLn('For task type '+Name+', found ', InCount, ' input files and ', OutCount, ' output files!');
+          If (Verbose)
+            Then WriteLn('(', OutCount, '/', OutRequired, ')');
           RageExit(NoMatch);
         End;
         // doing files
