@@ -1,7 +1,7 @@
 tokens:
   TaskName:
     key:   name
-    regex: '[a-z]+'
+    regex: '[a-z0-9]+'
     fixed: yes
   S:
     key:   group
